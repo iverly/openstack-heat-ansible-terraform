@@ -1,0 +1,37 @@
+- name: Create the server
+  openstack.cloud.server:
+    state: present
+    name: ansible-instance
+    image: "{{ compute_image }}"
+    key_name: "{{ compute_key_name }}"
+    timeout: 200
+    flavor: "{{ compute_flavor }}"
+    network: "{{ network_network_name }}"
+    security_groups:
+      - ansible-ssh
+    boot_from_volume: yes
+    volume_size: 20
+
+- name: get ip address of created server
+  openstack.cloud.server_info:
+    server: ansible-instance
+  register: server
+
+- name: Print server IP
+  ansible.builtin.debug:
+    msg: "{{ server.servers[0].addresses[network_network_name] | selectattr('OS-EXT-IPS:type', 'equalto', 'floating') | map(attribute='addr') | first }}"
+
+- name: Wait for SSH to come up
+  ansible.builtin.wait_for:
+    host: "{{ server.servers[0].addresses[network_network_name] | selectattr('OS-EXT-IPS:type', 'equalto', 'floating') | map(attribute='addr') | first }}"
+    port: 22
+    delay: 10
+    timeout: 200
+    state: started
+
+- name: Add the server to the inventory
+  ansible.builtin.add_host:
+    name: "{{ server.servers[0].addresses[network_network_name] | selectattr('OS-EXT-IPS:type', 'equalto', 'floating') | map(attribute='addr') | first }}"
+    groups: compute
+    ansible_user: fedora
+    ansible_python_interpreter: /usr/bin/python3

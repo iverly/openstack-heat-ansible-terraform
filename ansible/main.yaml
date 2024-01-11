@@ -1,0 +1,15 @@
+---
+- hosts: localhost
+  connection: local
+  vars_files:
+    - vars/compute.yaml
+    - vars/network.yaml
+  roles:
+    - role: network
+    - role: security
+    - role: compute
+
+- hosts: compute
+  become: yes
+  roles:
+    - role: connect

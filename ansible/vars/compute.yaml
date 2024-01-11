@@ -1,0 +1,4 @@
+---
+compute_flavor: m1.medium
+compute_key_name: mfoucher
+compute_image: Fedora-39

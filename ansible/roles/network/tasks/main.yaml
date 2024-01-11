@@ -1,0 +1,23 @@
+- name: Create Network
+  os_network:
+    state: present
+    name: "{{ network_network_name }}"
+    external: false
+  register: network
+
+- name: Create Subnet
+  os_subnet:
+    state: present
+    name: "{{ network_subnet_name }}"
+    network_name: "{{ network.network.name }}"
+    cidr: "{{ network_subnet_cidr }}"
+    dns_nameservers: "{{ network_dns_nameservers }}"
+  register: subnet
+
+- name: Create Router
+  os_router:
+    state: present
+    name: "{{ network_router_name }}"
+    network: "{{ network_ext_network_name }}"
+    interfaces:
+      - "{{ subnet.subnet.id }}"

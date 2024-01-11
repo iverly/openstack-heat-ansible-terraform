@@ -1,0 +1,8 @@
+network_network_name: "ansible-network"
+network_subnet_name: "ansible-subnet"
+network_subnet_cidr: "192.168.100.0/24"
+network_dns_nameservers:
+  - "8.8.8.8"
+  - "8.8.4.4"
+network_router_name: "ansible-router"
+network_ext_network_name: "public"
