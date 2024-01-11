@@ -1,0 +1,158 @@
+heat_template_version: 2014-10-16
+
+description: |
+  This template deploys the network resources for the stack
+
+parameters:
+  network_name:
+    type: string
+    description: Name of the private network to use
+    default: stack-front-and-back
+  public_network_name:
+    type: string
+    description: Name of the public network to use
+    default: public
+  backend_security_group:
+    type: string
+    description: Security group to use for the backend instance
+  nfs_security_group:
+    type: string
+    description: Security group to use for the NFS instance
+
+resources:
+  ##########################################
+  ##      Private Network resources       ##
+  ##########################################
+  network:
+    type: OS::Neutron::Net
+    properties:
+      name:
+        list_join:
+          ["-", [{ get_param: "OS::stack_name" }, { get_param: network_name }]]
+
+  subnet:
+    type: OS::Neutron::Subnet
+    depends_on: [network]
+    properties:
+      name:
+        list_join: ["-", [{ get_param: "OS::stack_name" }, "subnet"]]
+      dns_nameservers:
+        - 1.1.1.1
+        - 1.0.0.1
+      network: { get_resource: network }
+      ip_version: 4
+      cidr: 10.1.0.0/24
+
+  router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info: { "network": { get_param: public_network_name } }
+
+  router_subnet_connect:
+    type: OS::Neutron::RouterInterface
+    depends_on: [subnet, router]
+    properties:
+      router: { get_resource: router }
+      subnet: { get_resource: subnet }
+
+  backend_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: network }
+      security_groups: [get_param: backend_security_group]
+      fixed_ips:
+        - ip_address: 10.1.0.20
+          subnet: { get_resource: subnet }
+
+  nfs_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: network }
+      security_groups: [get_param: nfs_security_group]
+      fixed_ips:
+        - ip_address: 10.1.0.30
+          subnet: { get_resource: subnet }
+
+  ##########################################
+  ##       Public Network resources       ##
+  ##########################################
+  backend_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network_id: { get_param: public_network_name }
+
+  backend_floating_ip_association:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: backend_floating_ip }
+      port_id: { get_resource: backend_port }
+
+  nfs_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network_id: { get_param: public_network_name }
+
+  nfs_floating_ip_association:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: nfs_floating_ip }
+      port_id: { get_resource: nfs_port }
+
+  lb_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network_id: { get_param: public_network_name }
+      port_id: { get_attr: [lb, vip_port_id] }
+
+  ##########################################
+  ##        Load Balancer resources       ##
+  ##########################################
+  lb:
+    type: OS::Octavia::LoadBalancer
+    properties:
+      vip_subnet: { get_resource: subnet }
+
+  listener:
+    type: OS::Octavia::Listener
+    properties:
+      loadbalancer: { get_resource: lb }
+      protocol: HTTP
+      protocol_port: 80
+
+  pool:
+    type: OS::Octavia::Pool
+    properties:
+      listener: { get_resource: listener }
+      lb_algorithm: ROUND_ROBIN
+      protocol: HTTP
+      session_persistence:
+        type: SOURCE_IP
+
+  lb_monitor:
+    type: OS::Octavia::HealthMonitor
+    properties:
+      pool: { get_resource: pool }
+      type: TCP
+      delay: 5
+      max_retries: 5
+      timeout: 5
+
+outputs:
+  network:
+    description: Network to use for the stack
+    value: { get_resource: network }
+  subnet:
+    description: Subnet to use for the stack
+    value: { get_resource: subnet }
+  backend_port:
+    description: Port to use for the backend instance
+    value: { get_resource: backend_port }
+  nfs_port:
+    description: Port to use for the NFS instance
+    value: { get_resource: nfs_port }
+  lb:
+    description: The load balancer
+    value: { get_resource: lb }
+  pool:
+    description: The pool
+    value: { get_resource: pool }

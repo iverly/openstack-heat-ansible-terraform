@@ -1,0 +1,79 @@
+heat_template_version: 2014-10-16
+
+description: Simple template to deploy a backend and a frontend
+
+parameters:
+  image:
+    type: string
+    description: Name of the image to use
+    default: "0b2fdbf7-ea68-49ff-ae24-6f57d07c0759"
+  flavor:
+    type: string
+    description: Flavor to use for the instance
+    default: m1.medium
+  network_name:
+    type: string
+    description: Name of the private network to use
+    default: stack-front-and-back
+  public_network_name:
+    type: string
+    description: Name of the public network to use
+    default: public
+  key_name:
+    type: string
+    description: Key pair name
+    default: mfoucher
+
+resources:
+  ##########################################
+  ##          Network resources           ##
+  ##########################################
+  network:
+    type: network.yaml
+    properties:
+      network_name: { get_param: network_name }
+      public_network_name: { get_param: public_network_name }
+      backend_security_group: { get_attr: [security, backend_security_group] }
+      nfs_security_group: { get_attr: [security, nfs_security_group] }
+
+  ##########################################
+  ##          Security resources          ##
+  ##########################################
+  security:
+    type: security.yaml
+
+  ##########################################
+  ##            Disk resources            ##
+  ##########################################
+  disk:
+    type: disk.yaml
+    properties:
+      nfs: { get_attr: [compute, nfs] }
+
+  ##########################################
+  ##          Compute resources           ##
+  ##########################################
+  compute:
+    type: compute.yaml
+    properties:
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      public_network_name: { get_param: public_network_name }
+      key_name: { get_param: key_name }
+      network: { get_attr: [network, network] }
+      pool: { get_attr: [network, pool] }
+      frontend_cloud_init_config:
+        { get_attr: [cloud_init, frontend_cloud_init_config] }
+      backend_cloud_init_config:
+        { get_attr: [cloud_init, backend_cloud_init_config] }
+      nfs_cloud_init_config: { get_attr: [cloud_init, nfs_cloud_init_config] }
+      frontend_security_group: { get_attr: [security, frontend_security_group] }
+      backend_port: { get_attr: [network, backend_port] }
+      nfs_port: { get_attr: [network, nfs_port] }
+      subnet: { get_attr: [network, subnet] }
+
+  ##########################################
+  ##         Cloud init resources         ##
+  ##########################################
+  cloud_init:
+    type: cloud-init.yaml

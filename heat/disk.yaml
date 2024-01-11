@@ -1,0 +1,24 @@
+heat_template_version: 2014-10-16
+
+description: |
+  This template deploys the disk resources for the stack
+
+parameters:
+  nfs:
+    type: string
+    description: Name of the NFS instance to use
+
+resources:
+  nfs_volume:
+    type: OS::Cinder::Volume
+    properties:
+      name:
+        list_join: ["-", [{ get_param: "OS::stack_name" }, "nfs_volume"]]
+      size: 10
+
+  nfs_volume_attachment:
+    type: OS::Cinder::VolumeAttachment
+    properties:
+      volume_id: { get_resource: nfs_volume }
+      instance_uuid: { get_param: nfs }
+      mountpoint: /dev/vdb

@@ -1,0 +1,101 @@
+heat_template_version: 2014-10-16
+
+description: |
+  This template deploys the cloud init resources for the stack
+
+resources:
+  frontend_cloud_init_config:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        write_files:
+          - content: |
+            version: "2"
+            services:
+              wordpress:
+                image: wordpress:php8.3-apache
+                restart: always
+                user: root
+                ports:
+                  - 8080:8080
+                environment:
+                  WORDPRESS_DB_HOST: 10.1.0.20
+                  WORDPRESS_DB_USER: bn_wordpress
+                  WORDPRESS_DB_PASSWORD: bn_wordpress
+                  WORDPRESS_DB_NAME: bitnami_wordpress
+                volumes:
+                  - /mnt/data/wordpress:/var/www/html
+            path: /usr/local/app/docker-compose.yml
+            append: true
+        runcmd:
+          - mkdir -p /mnt/data
+          - mount -t nfs4 10.1.0.30:/mnt/data /mnt/data
+          - docker compose -f /usr/local/app/docker-compose.yml up -d
+
+  backend_cloud_init_config:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        write_files:
+          - content: |
+              version: '2'
+              services:
+                mariadb:
+                  image: bitnami/mariadb:11.1
+                  restart: always
+                  ports:
+                    - '3306:3306'
+                  volumes:
+                    - mariadb_data:/bitnami/mariadb
+                  environment:
+                    - MARIADB_ROOT_PASSWORD=bitnami
+                    - MARIADB_USER=bn_wordpress
+                    - MARIADB_PASSWORD=bn_wordpress
+                    - MARIADB_DATABASE=bitnami_wordpress
+              volumes:
+                mariadb_data:
+                  driver: local
+            path: /usr/local/app/docker-compose.yml
+            append: true
+        runcmd:
+          - docker compose -f /usr/local/app/docker-compose.yml up -d
+
+  nfs_cloud_init_config:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        package_update: true
+        package_upgrade: true
+        packages:
+          - nfs-utils
+        disk_setup:
+          /dev/vdb:
+            table_type: "gpt"
+            layout: True
+            overwrite: False
+        fs_setup:
+          - label: DATA_XFS
+            filesystem: "xfs"
+            device: "/dev/vdb"
+            partition: "auto"
+        mounts:
+          - [LABEL=DATA_XFS, /mnt/data, xfs]
+        write_files:
+          - content: /mnt/data 10.1.0.0/24(rw,no_root_squash)
+            path: /etc/exports
+            append: true
+        runcmd:
+          - chmod 777 /mnt/data
+          - systemctl enable nfs-server.service
+          - systemctl start nfs-server.service
+
+outputs:
+  frontend_cloud_init_config:
+    description: Cloud init config to use for frontend
+    value: { get_resource: frontend_cloud_init_config }
+  backend_cloud_init_config:
+    description: Cloud init config to use for backend
+    value: { get_resource: backend_cloud_init_config }
+  nfs_cloud_init_config:
+    description: Cloud init config to use for nfs
+    value: { get_resource: nfs_cloud_init_config }

@@ -1,0 +1,94 @@
+heat_template_version: 2014-10-16
+
+description: Simple template to deploy a backend and a frontend
+
+parameters:
+  image:
+    type: string
+    description: Name of the image to use
+  flavor:
+    type: string
+    description: Flavor to use for the instance
+  public_network_name:
+    type: string
+    description: Name of the public network to use
+  key_name:
+    type: string
+    description: Key pair name
+  network:
+    type: string
+    description: Name of the private network to use
+  pool:
+    type: string
+    description: Pool to contact
+  frontend_cloud_init_config:
+    type: string
+    description: Cloud init config to use for frontend
+  backend_cloud_init_config:
+    type: string
+    description: Cloud init config to use for backend
+  nfs_cloud_init_config:
+    type: string
+    description: Cloud init config to use for nfs
+  frontend_security_group:
+    type: string
+    description: Security group to use for the frontend instance
+  backend_port:
+    type: string
+    description: Port to use for the backend instance
+  nfs_port:
+    type: string
+    description: Port to use for the nfs instance
+  subnet:
+    type: string
+    description: Subnet to use for the frontend instance
+
+resources:
+  frontend-auto-scale-group:
+    type: OS::Heat::AutoScalingGroup
+    properties:
+      min_size: 1
+      max_size: 3
+      resource:
+        type: frontend-scaling-instance.yaml
+        properties:
+          image: { get_param: image }
+          flavor: { get_param: flavor }
+          network: { get_param: network }
+          public_network_name: { get_param: public_network_name }
+          key_name: { get_param: key_name }
+          pool: { get_param: pool }
+          cloud_init_config: { get_param: frontend_cloud_init_config }
+          frontend_security_group: { get_param: frontend_security_group }
+          subnet: { get_param: subnet }
+
+  backend:
+    type: OS::Nova::Server
+    properties:
+      name:
+        list_join: ["-", [{ get_param: "OS::stack_name" }, "backend-server"]]
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      user_data_format: RAW
+      user_data: { get_param: backend_cloud_init_config }
+      networks:
+        - port: { get_param: backend_port }
+
+  nfs:
+    type: OS::Nova::Server
+    properties:
+      name:
+        list_join: ["-", [{ get_param: "OS::stack_name" }, "nfs-server"]]
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      user_data_format: RAW
+      user_data: { get_param: nfs_cloud_init_config }
+      networks:
+        - port: { get_param: nfs_port }
+
+outputs:
+  nfs:
+    description: The NFS instance
+    value: { get_resource: nfs }
